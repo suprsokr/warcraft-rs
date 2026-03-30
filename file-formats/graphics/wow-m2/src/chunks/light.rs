@@ -71,7 +71,7 @@ pub struct M2Light {
 
 impl M2Light {
     /// Parse a light from a reader based on the M2 version
-    pub fn parse<R: Read + Seek>(reader: &mut R, _version: u32) -> Result<Self> {
+    pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
         let light_type_raw = reader.read_u8()?;
         let light_type = M2LightType::from_u8(light_type_raw).unwrap_or(M2LightType::Point);
 
@@ -80,11 +80,11 @@ impl M2Light {
 
         let position = C3Vector::parse(reader)?;
 
-        let ambient_color_animation = M2AnimationBlock::parse(reader)?;
-        let diffuse_color_animation = M2AnimationBlock::parse(reader)?;
-        let attenuation_start_animation = M2AnimationBlock::parse(reader)?;
-        let attenuation_end_animation = M2AnimationBlock::parse(reader)?;
-        let visibility_animation = M2AnimationBlock::parse(reader)?;
+        let ambient_color_animation = M2AnimationBlock::parse(reader, version)?;
+        let diffuse_color_animation = M2AnimationBlock::parse(reader, version)?;
+        let attenuation_start_animation = M2AnimationBlock::parse(reader, version)?;
+        let attenuation_end_animation = M2AnimationBlock::parse(reader, version)?;
+        let visibility_animation = M2AnimationBlock::parse(reader, version)?;
 
         let id = reader.read_u32_le()?;
 
@@ -107,18 +107,18 @@ impl M2Light {
     }
 
     /// Write a light to a writer based on the M2 version
-    pub fn write<W: Write>(&self, writer: &mut W, _version: u32) -> Result<()> {
+    pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
         writer.write_u8(self.light_type as u8)?;
         writer.write_u16_le(self.bone_index)?;
         writer.write_u8(0)?; // Write padding
 
         self.position.write(writer)?;
 
-        self.ambient_color_animation.write(writer)?;
-        self.diffuse_color_animation.write(writer)?;
-        self.attenuation_start_animation.write(writer)?;
-        self.attenuation_end_animation.write(writer)?;
-        self.visibility_animation.write(writer)?;
+        self.ambient_color_animation.write(writer, version)?;
+        self.diffuse_color_animation.write(writer, version)?;
+        self.attenuation_start_animation.write(writer, version)?;
+        self.attenuation_end_animation.write(writer, version)?;
+        self.visibility_animation.write(writer, version)?;
 
         writer.write_u32_le(self.id)?;
 

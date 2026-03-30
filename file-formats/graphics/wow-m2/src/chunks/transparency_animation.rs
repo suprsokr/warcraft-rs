@@ -13,15 +13,15 @@ pub struct M2TransparencyAnimation {
 
 impl M2TransparencyAnimation {
     /// Parse a transparency animation from a reader
-    pub fn parse<R: Read + Seek>(reader: &mut R) -> Result<Self> {
-        let alpha = M2AnimationBlock::parse(reader)?;
+    pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
+        let alpha = M2AnimationBlock::parse(reader, version)?;
 
         Ok(Self { alpha })
     }
 
     /// Write a transparency animation to a writer
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
-        self.alpha.write(writer)?;
+    pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
+        self.alpha.write(writer, version)?;
 
         Ok(())
     }
@@ -57,11 +57,12 @@ mod tests {
         data.extend_from_slice(&0u32.to_le_bytes()); // Values offset
 
         let mut cursor = Cursor::new(data);
-        let trans_anim = M2TransparencyAnimation::parse(&mut cursor).unwrap();
+        // Test data includes interpolation_ranges field, so use TBC version (260)
+        let trans_anim = M2TransparencyAnimation::parse(&mut cursor, 260).unwrap();
 
         // Test write
         let mut output = Vec::new();
-        trans_anim.write(&mut output).unwrap();
+        trans_anim.write(&mut output, 260).unwrap();
 
         // Check output size (should be the same as input)
         assert_eq!(output.len(), cursor.get_ref().len());

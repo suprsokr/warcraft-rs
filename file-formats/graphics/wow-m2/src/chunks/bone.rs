@@ -259,31 +259,25 @@ mod tests {
 
         // NO unknown fields for vanilla (WMVx M2Definitions.h shows vanilla goes directly to animation blocks)
 
-        // Translation track (M2TrackVec3: interpolation_type + global_sequence + ranges + timestamps + values - includes ranges for vanilla)
+        // Translation track (M2TrackVec3: interpolation_type + global_sequence + timestamps + values — vanilla has NO ranges)
         data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type = None
         data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence = none
-        data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-        data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
         data.extend_from_slice(&0u32.to_le_bytes()); // timestamps count
         data.extend_from_slice(&0u32.to_le_bytes()); // timestamps offset
         data.extend_from_slice(&0u32.to_le_bytes()); // values count
         data.extend_from_slice(&0u32.to_le_bytes()); // values offset
 
-        // Rotation track (M2TrackQuat: interpolation_type + global_sequence + ranges + timestamps + values - includes ranges for vanilla)
+        // Rotation track (M2TrackQuat: vanilla has NO ranges)
         data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type = None
         data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence = none
-        data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-        data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
         data.extend_from_slice(&0u32.to_le_bytes()); // timestamps count
         data.extend_from_slice(&0u32.to_le_bytes()); // timestamps offset
         data.extend_from_slice(&0u32.to_le_bytes()); // values count
         data.extend_from_slice(&0u32.to_le_bytes()); // values offset
 
-        // Scale track (M2TrackVec3: interpolation_type + global_sequence + ranges + timestamps + values - includes ranges for vanilla)
+        // Scale track (M2TrackVec3: vanilla has NO ranges)
         data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type = None
         data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence = none
-        data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-        data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
         data.extend_from_slice(&0u32.to_le_bytes()); // timestamps count
         data.extend_from_slice(&0u32.to_le_bytes()); // timestamps offset
         data.extend_from_slice(&0u32.to_le_bytes()); // values count
@@ -319,13 +313,11 @@ mod tests {
         data.extend_from_slice(&0u16.to_le_bytes()); // submesh_id: 0
         // NO unknown fields for vanilla (WMVx M2Definitions.h shows vanilla goes directly to animation blocks)
 
-        // Add reasonable animation track data (includes ranges for vanilla)
+        // Add reasonable animation track data (vanilla has NO ranges)
         for _ in 0..3 {
             // translation, rotation, scale
             data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type: None
             data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence: none
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
             data.extend_from_slice(&5u32.to_le_bytes()); // timestamps count (reasonable)
             data.extend_from_slice(&1000u32.to_le_bytes()); // timestamps offset (reasonable)
             data.extend_from_slice(&5u32.to_le_bytes()); // values count (reasonable)
@@ -343,13 +335,11 @@ mod tests {
         data.extend_from_slice(&0u16.to_le_bytes()); // submesh_id: 0
         // NO unknown fields for vanilla (WMVx M2Definitions.h shows vanilla goes directly to animation blocks)
 
-        // Add unreasonable animation track data (as seen in corruption, includes ranges for vanilla)
+        // Add unreasonable animation track data (as seen in corruption, vanilla has NO ranges)
         for count in [4294901760u32, 22768u32, 100u32] {
             // translation, rotation, scale
             data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type: None
             data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence: none
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
             data.extend_from_slice(&count.to_le_bytes()); // timestamps count (unreasonable)
             data.extend_from_slice(&1000u32.to_le_bytes()); // timestamps offset
             data.extend_from_slice(&count.to_le_bytes()); // values count (unreasonable)
@@ -361,10 +351,10 @@ mod tests {
         data.extend_from_slice(&0.0f32.to_le_bytes()); // pivot.z
 
         println!(
-            "Test data created: {} bytes (2 bones * 108 = 216 expected)",
+            "Test data created: {} bytes (2 bones * 84 = 168 expected)",
             data.len()
         );
-        assert_eq!(data.len(), 216); // 2 bones * 108 bytes each for vanilla with WMVx-aligned structure
+        assert_eq!(data.len(), 168); // 2 bones * 84 bytes each for vanilla (no ranges in tracks)
 
         let mut cursor = Cursor::new(&data);
 
@@ -398,8 +388,8 @@ mod tests {
         assert_eq!(bone2.rotation.timestamps.count, 22768);
         assert_eq!(bone2.scale.timestamps.count, 100);
 
-        // Verify cursor position (2 bones * 108 bytes each = 216 bytes total)
-        assert_eq!(cursor.position(), 216);
+        // Verify cursor position (2 bones * 84 bytes each = 168 bytes total)
+        assert_eq!(cursor.position(), 168);
 
         println!(
             "✓ Both bones parsed with expected values (including intentionally corrupted second bone)"
@@ -410,14 +400,12 @@ mod tests {
 
     #[test]
     fn test_m2track_byte_consumption_vanilla() {
-        // Test exact byte consumption of M2Track parsing for Vanilla (WITH ranges)
+        // Test exact byte consumption of M2Track parsing for Vanilla (NO ranges)
         let mut data = Vec::new();
 
-        // Create M2Track data for version 256 (SHOULD include ranges per WMVx reference)
+        // Create M2Track data for version 256 — vanilla does NOT have ranges
         data.extend_from_slice(&1u16.to_le_bytes()); // interpolation_type: Linear
         data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence: none
-        data.extend_from_slice(&1u32.to_le_bytes()); // ranges count
-        data.extend_from_slice(&800u32.to_le_bytes()); // ranges offset
         data.extend_from_slice(&3u32.to_le_bytes()); // timestamps count
         data.extend_from_slice(&1000u32.to_le_bytes()); // timestamps offset
         data.extend_from_slice(&3u32.to_le_bytes()); // values count
@@ -425,42 +413,30 @@ mod tests {
 
         assert_eq!(
             data.len(),
-            28,
-            "M2Track test data should be exactly 28 bytes for Vanilla"
+            20,
+            "M2Track test data should be exactly 20 bytes for Vanilla"
         );
 
         let mut cursor = Cursor::new(&data);
         let pos_before = cursor.position();
 
-        // Parse M2TrackVec3 (should consume all 28 bytes)
+        // Parse M2TrackVec3 (should consume all 20 bytes — no ranges for vanilla)
         let track = M2TrackVec3::parse(&mut cursor, 256).unwrap();
 
         let pos_after = cursor.position();
         let bytes_consumed = pos_after - pos_before;
 
-        println!(
-            "M2Track parsing: consumed {} bytes (expected 28)",
-            bytes_consumed
-        );
-        println!(
-            "Track details: interp={:?}, timestamps_count={}, values_count={}",
-            track.base.interpolation_type, track.timestamps.count, track.values.count
-        );
-
-        // Critical test: M2Track should consume exactly 28 bytes for version 256 (Vanilla) per WMVx reference
         assert_eq!(
-            bytes_consumed, 28,
-            "M2Track should consume exactly 28 bytes for version 256, but consumed {}",
+            bytes_consumed, 20,
+            "M2Track should consume exactly 20 bytes for version 256, but consumed {}",
             bytes_consumed
         );
 
-        // Verify the ranges field WAS parsed (Vanilla should have ranges per WMVx reference)
+        // Verify the ranges field was NOT parsed (Vanilla does not have ranges)
         assert!(
-            track.ranges.is_some(),
-            "M2Track SHOULD have ranges field for version 256 (Vanilla)"
+            track.ranges.is_none(),
+            "M2Track should NOT have ranges field for version 256 (Vanilla)"
         );
-
-        println!("✓ M2Track consumes exactly 28 bytes as expected for Vanilla");
     }
 
     #[test]
@@ -540,31 +516,25 @@ mod tests {
 
             // NO unknown fields for vanilla (WMVx M2Definitions.h shows vanilla goes directly to animation blocks)
 
-            // Translation track (M2TrackVec3: interpolation_type + global_sequence + ranges + timestamps + values - includes ranges for vanilla)
+            // Translation track (vanilla has NO ranges)
             data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type = None
             data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence = none
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
             data.extend_from_slice(&0u32.to_le_bytes()); // timestamps count
             data.extend_from_slice(&0u32.to_le_bytes()); // timestamps offset
             data.extend_from_slice(&0u32.to_le_bytes()); // values count
             data.extend_from_slice(&0u32.to_le_bytes()); // values offset
 
-            // Rotation track (M2TrackQuat: interpolation_type + global_sequence + ranges + timestamps + values - includes ranges for vanilla)
+            // Rotation track (vanilla has NO ranges)
             data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type = None
             data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence = none
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
             data.extend_from_slice(&0u32.to_le_bytes()); // timestamps count
             data.extend_from_slice(&0u32.to_le_bytes()); // timestamps offset
             data.extend_from_slice(&0u32.to_le_bytes()); // values count
             data.extend_from_slice(&0u32.to_le_bytes()); // values offset
 
-            // Scale track (M2TrackVec3: interpolation_type + global_sequence + ranges + timestamps + values - includes ranges for vanilla)
+            // Scale track (vanilla has NO ranges)
             data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type = None
             data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence = none
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
             data.extend_from_slice(&0u32.to_le_bytes()); // timestamps count
             data.extend_from_slice(&0u32.to_le_bytes()); // timestamps offset
             data.extend_from_slice(&0u32.to_le_bytes()); // values count
@@ -577,10 +547,10 @@ mod tests {
         }
 
         println!(
-            "Total test data: {} bytes (expected: 3 * 108 = 324)",
+            "Total test data: {} bytes (expected: 3 * 84 = 252)",
             data.len()
         );
-        assert_eq!(data.len(), 324); // 3 bones * 108 bytes each for vanilla
+        assert_eq!(data.len(), 252); // 3 bones * 84 bytes each for vanilla (no ranges)
 
         let mut cursor = Cursor::new(data);
 
@@ -607,19 +577,19 @@ mod tests {
             }
             assert_eq!(bone.submesh_id, 0);
 
-            // Each bone should consume exactly 108 bytes for vanilla (WITH ranges in M2Track)
-            // Bone structure: 4+4+2+2 (header, no unknown for vanilla) + 28*3 (3 M2Tracks with ranges) + 12 (pivot) = 108 bytes
+            // Each bone should consume exactly 84 bytes for vanilla (NO ranges in M2Track)
+            // Bone structure: 4+4+2+2 (header) + 20*3 (3 M2Tracks, no ranges) + 12 (pivot) = 84 bytes
             assert_eq!(
-                bytes_consumed, 108,
-                "Bone {} consumed {} bytes, expected 108",
+                bytes_consumed, 84,
+                "Bone {} consumed {} bytes, expected 84",
                 i, bytes_consumed
             );
 
             bones.push(bone);
         }
 
-        // Verify we consumed all data (3 bones * 108 bytes = 324 bytes)
-        assert_eq!(cursor.position(), 324);
+        // Verify we consumed all data (3 bones * 84 bytes = 252 bytes)
+        assert_eq!(cursor.position(), 252);
         println!("✓ All 3 bones parsed successfully with correct sequential alignment");
     }
 
@@ -640,13 +610,11 @@ mod tests {
         // Submesh ID
         data.extend_from_slice(&0u16.to_le_bytes());
 
-        // Animation tracks (empty for vanilla)
+        // Animation tracks (empty for vanilla, NO ranges)
         for _ in 0..3 {
             // translation, rotation, scale
             data.extend_from_slice(&0u16.to_le_bytes()); // interpolation_type = None
             data.extend_from_slice(&65535u16.to_le_bytes()); // global_sequence = none
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges count
-            data.extend_from_slice(&0u32.to_le_bytes()); // ranges offset
             data.extend_from_slice(&0u32.to_le_bytes()); // timestamps count
             data.extend_from_slice(&0u32.to_le_bytes()); // timestamps offset
             data.extend_from_slice(&0u32.to_le_bytes()); // values count
@@ -717,8 +685,8 @@ mod tests {
         let mut vanilla_data = Vec::new();
         bone.write(&mut vanilla_data, 256).unwrap(); // Vanilla version
 
-        // Vanilla M2Bone size: 4 + 4 + 2 + 2 (no unknown fields) + 28*3 (M2Track each with ranges) + 12 (pivot) = 108 bytes
-        assert_eq!(vanilla_data.len(), 108);
+        // Vanilla M2Bone size: 4 + 4 + 2 + 2 (no unknown fields) + 20*3 (M2Track, NO ranges) + 12 (pivot) = 84 bytes
+        assert_eq!(vanilla_data.len(), 84);
     }
 
     #[test]

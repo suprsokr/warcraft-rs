@@ -88,11 +88,11 @@ impl M2Attachment {
     /// Parse an attachment from a reader based on the M2 version
     ///
     /// Attachment structure is 48 bytes for all versions.
-    pub fn parse<R: Read + Seek>(reader: &mut R, _version: u32) -> Result<Self> {
+    pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
         let id = reader.read_u32_le()?;
         let bone_index = reader.read_i32_le()?;
         let position = C3Vector::parse(reader)?;
-        let scale_animation = M2AnimationBlock::parse(reader)?;
+        let scale_animation = M2AnimationBlock::parse(reader, version)?;
 
         Ok(Self {
             id,
@@ -103,11 +103,11 @@ impl M2Attachment {
     }
 
     /// Write an attachment to a writer based on the M2 version
-    pub fn write<W: Write>(&self, writer: &mut W, _version: u32) -> Result<()> {
+    pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
         writer.write_u32_le(self.id)?;
         writer.write_i32_le(self.bone_index)?;
         self.position.write(writer)?;
-        self.scale_animation.write(writer)?;
+        self.scale_animation.write(writer, version)?;
 
         Ok(())
     }
@@ -148,8 +148,8 @@ mod tests {
             .write(&mut data, M2Version::Vanilla.to_header_version())
             .unwrap();
 
-        // Attachment should be 48 bytes
-        assert_eq!(data.len(), 48);
+        // Attachment: id(4) + bone(4) + pos(12) + anim_block(20 for vanilla, no ranges) = 40
+        assert_eq!(data.len(), 40);
 
         // Test parse
         let mut cursor = Cursor::new(data);

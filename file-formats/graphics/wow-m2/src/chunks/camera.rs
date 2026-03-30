@@ -67,15 +67,15 @@ impl M2Camera {
         let near_clip = reader.read_f32_le()?;
 
         // Position track followed by position base (C3Vector)
-        let position_animation = M2AnimationBlock::parse(reader)?;
+        let position_animation = M2AnimationBlock::parse(reader, version)?;
         let position_base = C3Vector::parse(reader)?;
 
         // Target position track followed by target base (C3Vector)
-        let target_position_animation = M2AnimationBlock::parse(reader)?;
+        let target_position_animation = M2AnimationBlock::parse(reader, version)?;
         let target_position_base = C3Vector::parse(reader)?;
 
         // Roll track (no base value - roll defaults to 0)
-        let roll_animation = M2AnimationBlock::parse(reader)?;
+        let roll_animation = M2AnimationBlock::parse(reader, version)?;
 
         // ID and flags are only present in WotLK+ (version >= 264)
         let (id, flags) = if version >= 264 {
@@ -111,15 +111,15 @@ impl M2Camera {
         writer.write_f32_le(self.near_clip)?;
 
         // Position track followed by position base
-        self.position_animation.write(writer)?;
+        self.position_animation.write(writer, version)?;
         self.position_base.write(writer)?;
 
         // Target position track followed by target base
-        self.target_position_animation.write(writer)?;
+        self.target_position_animation.write(writer, version)?;
         self.target_position_base.write(writer)?;
 
         // Roll track (no base value)
-        self.roll_animation.write(writer)?;
+        self.roll_animation.write(writer, version)?;
 
         // ID and flags only for WotLK+ (version >= 264)
         if version >= 264 {
@@ -155,16 +155,16 @@ impl M2Camera {
 
     /// Returns the size of a camera in bytes for the given version
     pub fn size(version: u32) -> usize {
-        if version >= 264 {
-            // WotLK+: 20-byte tracks + id/flags
-            // type(4) + fov/far/near(12) + pos_track(20) + pos_base(12)
-            // + target_track(20) + target_base(12) + roll_track(20) + id(4) + flags(4)
-            108
+        let track_size = if version >= 260 && version < 264 {
+            28 // TBC: 20-byte track + 8-byte ranges
         } else {
-            // Pre-WotLK: 28-byte tracks (with ranges), no id/flags
-            // type(4) + fov/far/near(12) + pos_track(28) + pos_base(12)
-            // + target_track(28) + target_base(12) + roll_track(28)
-            124
+            20 // Vanilla and WotLK+: no ranges
+        };
+        let base_size = 16 + track_size * 3 + 24; // type+fov+far+near + 3 tracks + 2 bases
+        if version >= 264 {
+            base_size + 8 // + id(4) + flags(2) + pad(2)
+        } else {
+            base_size
         }
     }
 }
@@ -183,9 +183,9 @@ mod tests {
         let mut data = Vec::new();
         camera.write(&mut data, version).unwrap();
 
-        // Vanilla camera: type(4) + fov/far/near(12) + 3 tracks(28*3) + 2 bases(12*2)
-        // = 16 + 84 + 24 = 124 bytes (no id/flags)
-        assert_eq!(data.len(), 124);
+        // Vanilla camera: type(4) + fov/far/near(12) + 3 tracks(20*3, no ranges) + 2 bases(12*2)
+        // = 16 + 60 + 24 = 100 bytes (no id/flags)
+        assert_eq!(data.len(), 100);
 
         // Test parse
         let mut cursor = Cursor::new(data);
@@ -207,10 +207,9 @@ mod tests {
         let mut data = Vec::new();
         camera.write(&mut data, version).unwrap();
 
-        // Note: Current implementation always writes 28-byte tracks (pre-WotLK format)
-        // WotLK+ should technically use 20-byte tracks, but that's not yet implemented
-        // So actual size: 16 + 84 + 24 + 8 (id/flags/pad) = 132 bytes
-        assert_eq!(data.len(), 132);
+        // WotLK+: 20-byte tracks (no ranges) + id/flags
+        // type(4) + fov/far/near(12) + 3 tracks(20*3) + 2 bases(12*2) + id(4) + flags(2) + pad(2) = 108
+        assert_eq!(data.len(), 108);
 
         // Test parse
         let mut cursor = Cursor::new(data);
@@ -231,10 +230,10 @@ mod tests {
 
     #[test]
     fn test_camera_size() {
-        // These are the expected format sizes (not current implementation sizes)
-        assert_eq!(M2Camera::size(256), 124); // Vanilla (28-byte tracks)
-        assert_eq!(M2Camera::size(263), 124); // TBC (28-byte tracks)
-        assert_eq!(M2Camera::size(264), 108); // WotLK (20-byte tracks)
-        assert_eq!(M2Camera::size(272), 108); // MoP (20-byte tracks)
+        assert_eq!(M2Camera::size(256), 100); // Vanilla (20-byte tracks, no ranges, no id/flags)
+        assert_eq!(M2Camera::size(260), 124); // TBC (28-byte tracks with ranges, no id/flags)
+        assert_eq!(M2Camera::size(263), 124); // TBC (28-byte tracks with ranges, no id/flags)
+        assert_eq!(M2Camera::size(264), 108); // WotLK (20-byte tracks, with id/flags)
+        assert_eq!(M2Camera::size(272), 108); // MoP (20-byte tracks, with id/flags)
     }
 }

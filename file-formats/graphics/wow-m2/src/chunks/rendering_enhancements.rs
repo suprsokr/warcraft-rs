@@ -876,7 +876,8 @@ impl ExtendedTextureAnimation {
     /// Parse extended texture animation
     pub fn parse<R: Read + Seek>(reader: &mut R) -> Result<Self> {
         // Parse base texture animation first
-        let base_animation = M2TextureAnimation::parse(reader)?;
+        // ExtendedTextureAnimation is Legion+ only; use a high version for the animation blocks
+        let base_animation = M2TextureAnimation::parse(reader, 276)?;
 
         // Parse extended properties
         let extended_properties = ExtendedAnimationProperties {
@@ -902,7 +903,7 @@ impl ExtendedTextureAnimation {
     /// Write extended texture animation
     pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
         // Write base animation first
-        self.base_animation.write(writer)?;
+        self.base_animation.write(writer, 276)?;
 
         // Write extended properties
         writer.write_f32_le(self.extended_properties.flow_direction[0])?;
@@ -1767,13 +1768,11 @@ mod tests {
         data.extend_from_slice(&1u16.to_le_bytes()); // Animation type (Scroll)
         data.extend_from_slice(&0u16.to_le_bytes()); // Padding
 
-        // Add minimal animation block data (would be more complex in reality)
+        // Add minimal animation block data (Legion+ version, no interpolation_ranges)
         for _ in 0..5 {
             // Each animation block: interpolation_type, global_sequence, timestamps, values
             data.extend_from_slice(&0u16.to_le_bytes()); // Interpolation type
             data.extend_from_slice(&(-1i16).to_le_bytes()); // Global sequence
-            data.extend_from_slice(&0u32.to_le_bytes()); // Interpolation ranges count
-            data.extend_from_slice(&0u32.to_le_bytes()); // Interpolation ranges offset
             data.extend_from_slice(&0u32.to_le_bytes()); // Timestamps count
             data.extend_from_slice(&0u32.to_le_bytes()); // Timestamps offset
             data.extend_from_slice(&0u32.to_le_bytes()); // Values count

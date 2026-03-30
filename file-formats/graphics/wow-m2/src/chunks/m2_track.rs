@@ -124,9 +124,9 @@ impl<T> M2Track<T> {
     pub fn parse<R: Read>(reader: &mut R, version: u32) -> Result<Self> {
         let base = M2TrackBase::parse(reader)?;
 
-        // WMVx M2Definitions.h shows: Pre-WotLK versions (< 264) include ranges field
-        // This includes both Vanilla (256-257) AND TBC (260-263)
-        let (ranges, timestamps, values) = if version < 264 {
+        // The interpolation_ranges field exists only in TBC (versions 260–263).
+        // Vanilla (256–257) does NOT have this field. WotLK+ (264+) removed it.
+        let (ranges, timestamps, values) = if version >= 260 && version < 264 {
             // Pre-WotLK format: ranges + timestamps + values
             let ranges = M2Array::parse(reader)?;
             let timestamps = M2Array::parse(reader)?;
@@ -155,8 +155,8 @@ impl<T> M2Track<T> {
     pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
         self.base.write(writer)?;
 
-        // Write ranges field for all Pre-WotLK versions (< 264) - includes vanilla AND TBC
-        if version < 264 {
+        // Write ranges field only for TBC (versions 260–263)
+        if version >= 260 && version < 264 {
             if let Some(ref ranges) = self.ranges {
                 ranges.write(writer)?;
             } else {

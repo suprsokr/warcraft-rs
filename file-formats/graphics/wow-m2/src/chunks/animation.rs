@@ -103,14 +103,21 @@ impl<T: M2Parse> Default for M2AnimationTrack<T> {
 }
 
 impl<T: M2Parse> M2AnimationTrack<T> {
-    /// Parse an animation track from a reader
-    pub fn parse<R: Read + Seek>(reader: &mut R) -> Result<Self> {
+    /// Parse an animation track from a reader.
+    ///
+    /// The `interpolation_ranges` field exists only in TBC (versions 260–263).
+    /// Vanilla (≤257) and WotLK+ (≥264) omit it.
+    pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
         let interpolation_type_raw = reader.read_u16_le()?;
         let interpolation_type = M2InterpolationType::from_u16(interpolation_type_raw)
             .unwrap_or(M2InterpolationType::None);
 
         let global_sequence = reader.read_i16_le()?;
-        let interpolation_ranges = M2Array::parse(reader)?;
+        let interpolation_ranges = if version >= 260 && version < 264 {
+            M2Array::parse(reader)?
+        } else {
+            M2Array::new(0, 0)
+        };
         let timestamps = M2Array::parse(reader)?;
         let values = M2Vec::<T>::parse(reader)?;
 
@@ -124,10 +131,12 @@ impl<T: M2Parse> M2AnimationTrack<T> {
     }
 
     /// Write an animation track to a writer
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+    pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
         writer.write_u16_le(self.interpolation_type as u16)?;
         writer.write_i16_le(self.global_sequence)?;
-        self.interpolation_ranges.write(writer)?;
+        if version >= 260 && version < 264 {
+            self.interpolation_ranges.write(writer)?;
+        }
         self.timestamps.write(writer)?;
         self.values.write(writer)?;
 
@@ -154,8 +163,8 @@ impl<T: M2Parse> M2AnimationBlock<T> {
     }
 
     /// Parse an animation block from a reader
-    pub fn parse<R: Read + Seek>(reader: &mut R) -> Result<Self> {
-        let track = M2AnimationTrack::parse(reader)?;
+    pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
+        let track = M2AnimationTrack::parse(reader, version)?;
 
         Ok(Self {
             track,
@@ -164,8 +173,8 @@ impl<T: M2Parse> M2AnimationBlock<T> {
     }
 
     /// Write an animation block to a writer
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
-        self.track.write(writer)?;
+    pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
+        self.track.write(writer, version)?;
 
         Ok(())
     }

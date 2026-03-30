@@ -94,7 +94,7 @@ impl C4Quaternion {
 
 impl M2TextureTransform {
     /// Parse a texture transform from a reader
-    pub fn parse<R: Read + Seek>(reader: &mut R) -> Result<Self> {
+    pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
         let id = reader.read_u32_le()?;
 
         let transform_type_raw = reader.read_u16_le()?;
@@ -104,9 +104,9 @@ impl M2TextureTransform {
         // Skip 2 bytes of padding
         reader.read_u16_le()?;
 
-        let translation = M2AnimationBlock::parse(reader)?;
-        let rotation = M2AnimationBlock::parse(reader)?;
-        let scaling = M2AnimationBlock::parse(reader)?;
+        let translation = M2AnimationBlock::parse(reader, version)?;
+        let rotation = M2AnimationBlock::parse(reader, version)?;
+        let scaling = M2AnimationBlock::parse(reader, version)?;
 
         Ok(Self {
             id,
@@ -118,16 +118,16 @@ impl M2TextureTransform {
     }
 
     /// Write a texture transform to a writer
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+    pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
         writer.write_u32_le(self.id)?;
         writer.write_u16_le(self.transform_type as u16)?;
 
         // Write 2 bytes of padding
         writer.write_u16_le(0)?;
 
-        self.translation.write(writer)?;
-        self.rotation.write(writer)?;
-        self.scaling.write(writer)?;
+        self.translation.write(writer, version)?;
+        self.rotation.write(writer, version)?;
+        self.scaling.write(writer, version)?;
 
         Ok(())
     }

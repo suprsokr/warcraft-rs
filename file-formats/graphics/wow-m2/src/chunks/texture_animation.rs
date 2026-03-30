@@ -53,7 +53,7 @@ pub struct M2TextureAnimation {
 
 impl M2TextureAnimation {
     /// Parse a texture animation from a reader
-    pub fn parse<R: Read + Seek>(reader: &mut R) -> Result<Self> {
+    pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
         let type_raw = reader.read_u16_le()?;
         let animation_type =
             M2TextureAnimationType::from_u16(type_raw).unwrap_or(M2TextureAnimationType::None);
@@ -61,11 +61,11 @@ impl M2TextureAnimation {
         // Skip 2 bytes of padding
         reader.read_u16_le()?;
 
-        let translation_u = M2AnimationBlock::parse(reader)?;
-        let translation_v = M2AnimationBlock::parse(reader)?;
-        let rotation = M2AnimationBlock::parse(reader)?;
-        let scale_u = M2AnimationBlock::parse(reader)?;
-        let scale_v = M2AnimationBlock::parse(reader)?;
+        let translation_u = M2AnimationBlock::parse(reader, version)?;
+        let translation_v = M2AnimationBlock::parse(reader, version)?;
+        let rotation = M2AnimationBlock::parse(reader, version)?;
+        let scale_u = M2AnimationBlock::parse(reader, version)?;
+        let scale_v = M2AnimationBlock::parse(reader, version)?;
 
         Ok(Self {
             animation_type,
@@ -78,17 +78,17 @@ impl M2TextureAnimation {
     }
 
     /// Write a texture animation to a writer
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+    pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
         writer.write_u16_le(self.animation_type as u16)?;
 
         // Write 2 bytes of padding
         writer.write_u16_le(0)?;
 
-        self.translation_u.write(writer)?;
-        self.translation_v.write(writer)?;
-        self.rotation.write(writer)?;
-        self.scale_u.write(writer)?;
-        self.scale_v.write(writer)?;
+        self.translation_u.write(writer, version)?;
+        self.translation_v.write(writer, version)?;
+        self.rotation.write(writer, version)?;
+        self.scale_u.write(writer, version)?;
+        self.scale_v.write(writer, version)?;
 
         Ok(())
     }
@@ -177,13 +177,14 @@ mod tests {
         data.extend_from_slice(&0u32.to_le_bytes()); // Values offset
 
         let mut cursor = Cursor::new(data);
-        let tex_anim = M2TextureAnimation::parse(&mut cursor).unwrap();
+        // Test data includes interpolation_ranges fields, so use TBC version (260)
+        let tex_anim = M2TextureAnimation::parse(&mut cursor, 260).unwrap();
 
         assert_eq!(tex_anim.animation_type, M2TextureAnimationType::Scroll);
 
         // Test write
         let mut output = Vec::new();
-        tex_anim.write(&mut output).unwrap();
+        tex_anim.write(&mut output, 260).unwrap();
 
         // Check output size (should be the same as input)
         assert_eq!(output.len(), cursor.get_ref().len());

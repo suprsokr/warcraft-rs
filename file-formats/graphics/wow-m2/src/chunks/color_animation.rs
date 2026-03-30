@@ -84,17 +84,17 @@ pub struct M2ColorAnimation {
 
 impl M2ColorAnimation {
     /// Parse a color animation from a reader
-    pub fn parse<R: Read + Seek>(reader: &mut R) -> Result<Self> {
-        let color = M2AnimationBlock::parse(reader)?;
-        let alpha = M2AnimationBlock::parse(reader)?;
+    pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
+        let color = M2AnimationBlock::parse(reader, version)?;
+        let alpha = M2AnimationBlock::parse(reader, version)?;
 
         Ok(Self { color, alpha })
     }
 
     /// Write a color animation to a writer
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
-        self.color.write(writer)?;
-        self.alpha.write(writer)?;
+    pub fn write<W: Write>(&self, writer: &mut W, version: u32) -> Result<()> {
+        self.color.write(writer, version)?;
+        self.alpha.write(writer, version)?;
 
         Ok(())
     }

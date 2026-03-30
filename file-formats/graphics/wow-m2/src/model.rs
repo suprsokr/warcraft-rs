@@ -3434,19 +3434,19 @@ impl M2Model {
 
         // Parse texture animations
         let texture_animations = read_array(reader, &header.texture_animations.convert(), |r| {
-            M2TextureAnimation::parse(r)
+            M2TextureAnimation::parse(r, header.version)
         })?;
 
         // Parse color animations
         let color_animations = read_array(reader, &header.color_animations.convert(), |r| {
-            M2ColorAnimation::parse(r)
+            M2ColorAnimation::parse(r, header.version)
         })?;
 
         // Parse transparency animations (stored in header.transparency_lookup field,
         // which despite its name contains M2TransparencyAnimation structures, not lookup indices)
         let transparency_animations =
             read_array(reader, &header.transparency_lookup.convert(), |r| {
-                M2TransparencyAnimation::parse(r)
+                M2TransparencyAnimation::parse(r, header.version)
             })?;
 
         // Parse events (timeline triggers for sounds, effects, etc.)
@@ -4434,7 +4434,7 @@ impl M2Model {
             let mut temp_anim_data = Vec::new();
             for anim in &self.texture_animations {
                 let mut anim_data = Vec::new();
-                anim.write(&mut anim_data)?;
+                anim.write(&mut anim_data, header.version)?;
                 temp_anim_data.push(anim_data);
             }
             let anims_total_size: usize = temp_anim_data.iter().map(|v| v.len()).sum();
@@ -4482,7 +4482,7 @@ impl M2Model {
                     relocate_texture_animation_offsets(&mut relocated_anim, &offset_map);
 
                     let mut anim_data = Vec::new();
-                    relocated_anim.write(&mut anim_data)?;
+                    relocated_anim.write(&mut anim_data, header.version)?;
                     data_section.extend_from_slice(&anim_data);
                 }
 
@@ -4527,7 +4527,7 @@ impl M2Model {
                     static_anim.scale_v = M2AnimationBlock::default();
 
                     let mut anim_data = Vec::new();
-                    static_anim.write(&mut anim_data)?;
+                    static_anim.write(&mut anim_data, header.version)?;
                     data_section.extend_from_slice(&anim_data);
                 }
 
@@ -4547,7 +4547,7 @@ impl M2Model {
             let mut temp_anim_data = Vec::new();
             for anim in &self.color_animations {
                 let mut anim_data = Vec::new();
-                anim.write(&mut anim_data)?;
+                anim.write(&mut anim_data, header.version)?;
                 temp_anim_data.push(anim_data);
             }
             let anims_total_size: usize = temp_anim_data.iter().map(|v| v.len()).sum();
@@ -4595,7 +4595,7 @@ impl M2Model {
                     relocate_color_animation_offsets(&mut relocated_anim, &offset_map);
 
                     let mut anim_data = Vec::new();
-                    relocated_anim.write(&mut anim_data)?;
+                    relocated_anim.write(&mut anim_data, header.version)?;
                     data_section.extend_from_slice(&anim_data);
                 }
 
@@ -4636,7 +4636,7 @@ impl M2Model {
                     static_anim.alpha = M2AnimationBlock::default();
 
                     let mut anim_data = Vec::new();
-                    static_anim.write(&mut anim_data)?;
+                    static_anim.write(&mut anim_data, header.version)?;
                     data_section.extend_from_slice(&anim_data);
                 }
 
@@ -4656,7 +4656,7 @@ impl M2Model {
             let mut temp_anim_data = Vec::new();
             for anim in &self.transparency_animations {
                 let mut anim_data = Vec::new();
-                anim.write(&mut anim_data)?;
+                anim.write(&mut anim_data, header.version)?;
                 temp_anim_data.push(anim_data);
             }
             let anims_total_size: usize = temp_anim_data.iter().map(|v| v.len()).sum();
@@ -4704,7 +4704,7 @@ impl M2Model {
                     relocate_transparency_animation_offsets(&mut relocated_anim, &offset_map);
 
                     let mut anim_data = Vec::new();
-                    relocated_anim.write(&mut anim_data)?;
+                    relocated_anim.write(&mut anim_data, header.version)?;
                     data_section.extend_from_slice(&anim_data);
                 }
 
@@ -4744,7 +4744,7 @@ impl M2Model {
                     static_anim.alpha = M2AnimationBlock::default();
 
                     let mut anim_data = Vec::new();
-                    static_anim.write(&mut anim_data)?;
+                    static_anim.write(&mut anim_data, header.version)?;
                     data_section.extend_from_slice(&anim_data);
                 }
 
