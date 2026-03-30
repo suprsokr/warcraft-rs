@@ -496,7 +496,7 @@ fn write_mcnk_chunk<W: Write + Seek>(writer: &mut W, mcnk: &McnkChunk) -> Result
         let liquid_start = writer.stream_position()?;
         write_chunk(writer, ChunkId::MCLQ, mclq)?;
         let liquid_end = writer.stream_position()?;
-        header.size_liquid = (liquid_end - liquid_start) as u32;
+        header.size_liquid = (liquid_end - liquid_start - 8) as u32;
     }
 
     // Write MCCV (vertex colors) if present
@@ -1288,5 +1288,80 @@ mod tests {
 
         assert_eq!(second_offset_instances, 0);
         assert_eq!(second_layer_count, 0);
+    }
+
+    /// Regression test: size_liquid must exclude the 8-byte MCLQ chunk header.
+    ///
+    /// The parser reads `size_liquid` bytes AFTER consuming the 8-byte header,
+    /// so if size_liquid includes the header the parser overshoots by 8 bytes
+    /// per liquid chunk — truncating the last MCNK (index 255) at EOF.
+    #[test]
+    fn test_mclq_size_liquid_excludes_chunk_header() {
+        use crate::chunks::mcnk::{LiquidType, LiquidVertex, MclqChunk};
+
+        // Build a single MCNK with MCLQ liquid data
+        let mut mcnk = create_minimal_mcnk();
+        mcnk.header.flags.value = 0x04; // FLAG_HAS_WATER
+        mcnk.liquid = Some(MclqChunk {
+            liquid_type: LiquidType::Water,
+            min_height: 10.0,
+            max_height: 12.0,
+            vertices: vec![
+                LiquidVertex {
+                    union_data: [0; 4],
+                    height: 11.0,
+                };
+                81
+            ],
+            tile_flags: [0x0F; 64],
+        });
+
+        let adt = AdtBuilder::new()
+            .add_texture("test.blp")
+            .add_mcnk_chunk(mcnk)
+            .build()
+            .expect("build failed");
+
+        let bytes = adt.to_bytes().expect("serialize failed");
+
+        // Find the MCLQ sub-chunk inside the serialized bytes
+        let mclq_magic_pos = bytes
+            .windows(4)
+            .position(|w| w == b"QLCM") // MCLQ reversed
+            .expect("MCLQ not found in serialized ADT");
+
+        // Read the MCLQ chunk size field (4 bytes after magic)
+        let mclq_chunk_size = u32::from_le_bytes([
+            bytes[mclq_magic_pos + 4],
+            bytes[mclq_magic_pos + 5],
+            bytes[mclq_magic_pos + 6],
+            bytes[mclq_magic_pos + 7],
+        ]);
+
+        // MCLQ data: 8 (min/max height) + 81*8 (vertices) + 64 (tile_flags) = 720
+        assert_eq!(mclq_chunk_size, 720, "MCLQ chunk data size should be 720");
+
+        // Now find the MCNK and parse back its header to check size_liquid
+        let mcnk_pos = bytes
+            .windows(4)
+            .position(|w| w == b"KNCM") // MCNK reversed
+            .expect("MCNK not found");
+
+        // Parse the MCNK header using binrw to get size_liquid reliably
+        use binrw::BinRead;
+        let mut header_cursor = Cursor::new(&bytes[mcnk_pos + 8..]);
+        let header = McnkHeader::read_le(&mut header_cursor).expect("header parse failed");
+
+        assert!(header.ofs_liquid > 0, "ofs_liquid should be non-zero");
+        // size_liquid must equal MCLQ data size (720), NOT 720+8
+        assert_eq!(
+            header.size_liquid, 720,
+            "size_liquid must be data-only (720), not include 8-byte chunk header (728)"
+        );
+
+        // Verify round-trip: parse the serialized bytes back
+        let mut cursor = std::io::BufReader::new(Cursor::new(&bytes));
+        let parsed = crate::api::parse_adt(&mut cursor);
+        assert!(parsed.is_ok(), "round-trip parse failed: {:?}", parsed.err());
     }
 }
