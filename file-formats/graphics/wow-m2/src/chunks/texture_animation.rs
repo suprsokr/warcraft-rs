@@ -54,27 +54,50 @@ pub struct M2TextureAnimation {
 impl M2TextureAnimation {
     /// Parse a texture animation from a reader
     pub fn parse<R: Read + Seek>(reader: &mut R) -> Result<Self> {
-        let type_raw = reader.read_u16_le()?;
-        let animation_type =
-            M2TextureAnimationType::from_u16(type_raw).unwrap_or(M2TextureAnimationType::None);
+        Self::parse_versioned(reader, 264) // Default to WotLK+ behavior for backward compat
+    }
 
-        // Skip 2 bytes of padding
-        reader.read_u16_le()?;
+    /// Parse a texture animation with version awareness
+    /// Pre-Wrath: 3 M2Track blocks (translation, rotation, scaling), no type header
+    /// WotLK+: type + padding + 5 M2AnimationBlocks
+    pub fn parse_versioned<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
+        if version < 264 {
+            // Pre-Wrath: M2TextureTransform = 3 M2Tracks (translation C3Vector, rotation C4Quat, scaling C3Vector)
+            let translation_u = M2AnimationBlock::parse(reader)?;
+            let rotation = M2AnimationBlock::parse(reader)?;
+            let scale_u = M2AnimationBlock::parse(reader)?;
 
-        let translation_u = M2AnimationBlock::parse(reader)?;
-        let translation_v = M2AnimationBlock::parse(reader)?;
-        let rotation = M2AnimationBlock::parse(reader)?;
-        let scale_u = M2AnimationBlock::parse(reader)?;
-        let scale_v = M2AnimationBlock::parse(reader)?;
+            Ok(Self {
+                animation_type: M2TextureAnimationType::None,
+                translation_u,
+                translation_v: M2AnimationBlock::default(),
+                rotation,
+                scale_u,
+                scale_v: M2AnimationBlock::default(),
+            })
+        } else {
+            let type_raw = reader.read_u16_le()?;
+            let animation_type =
+                M2TextureAnimationType::from_u16(type_raw).unwrap_or(M2TextureAnimationType::None);
 
-        Ok(Self {
-            animation_type,
-            translation_u,
-            translation_v,
-            rotation,
-            scale_u,
-            scale_v,
-        })
+            // Skip 2 bytes of padding
+            reader.read_u16_le()?;
+
+            let translation_u = M2AnimationBlock::parse(reader)?;
+            let translation_v = M2AnimationBlock::parse(reader)?;
+            let rotation = M2AnimationBlock::parse(reader)?;
+            let scale_u = M2AnimationBlock::parse(reader)?;
+            let scale_v = M2AnimationBlock::parse(reader)?;
+
+            Ok(Self {
+                animation_type,
+                translation_u,
+                translation_v,
+                rotation,
+                scale_u,
+                scale_v,
+            })
+        }
     }
 
     /// Write a texture animation to a writer

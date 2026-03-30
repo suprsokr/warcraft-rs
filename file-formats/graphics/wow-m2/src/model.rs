@@ -3434,7 +3434,7 @@ impl M2Model {
 
         // Parse texture animations
         let texture_animations = read_array(reader, &header.texture_animations.convert(), |r| {
-            M2TextureAnimation::parse(r)
+            M2TextureAnimation::parse_versioned(r, header.version)
         })?;
 
         // Parse color animations

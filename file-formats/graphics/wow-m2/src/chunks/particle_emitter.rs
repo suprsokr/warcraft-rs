@@ -257,8 +257,215 @@ pub struct M2ParticleEmitter {
 }
 
 impl M2ParticleEmitter {
+    /// Parse a pre-Wrath (vanilla/TBC) particle emitter from the M2ParticleOld layout.
+    /// This handles versions < 264 which have a fundamentally different struct layout
+    /// from the one the main `parse` method expects.
+    fn parse_pre_wrath<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
+        let is_pre_tbc = version < 262;
+
+        // Common header
+        let id = reader.read_u32_le()?;
+        let flags = M2ParticleFlags::from_bits_retain(reader.read_u32_le()?);
+        let position = C3Vector::parse(reader)?;
+        let bone_index = reader.read_u16_le()?;
+        let texture_index = reader.read_u16_le()?;
+        let model_filename = M2Array::parse(reader)?;
+        let child_emitter_model_filename: M2Array<u8> = M2Array::parse(reader)?;
+
+        // Version-dependent blending/emitter fields
+        let (blending_type, emitter_type, particle_type, head_or_tail) = if is_pre_tbc {
+            let blend = reader.read_u16_le()?;
+            let emitter = reader.read_u16_le()?;
+            let particle = reader.read_u8()?;
+            let head = reader.read_u8()?;
+            (blend as u8, emitter as u16, particle, head)
+        } else {
+            // TBC (>= 262): u8 blendingType, u8 emitterType, u16 particleColorIndex
+            let blend = reader.read_u8()?;
+            let emitter = reader.read_u8()?;
+            let _particle_color_index = reader.read_u16_le()?;
+            let particle = reader.read_u8()?;
+            let head = reader.read_u8()?;
+            (blend, emitter as u16, particle, head)
+        };
+
+        let emitter_type_enum = M2ParticleEmitterType::from_u8(emitter_type as u8)
+            .unwrap_or(M2ParticleEmitterType::Point);
+
+        // priorityPlane, rows, columns
+        let _priority_plane = reader.read_i16_le()?;
+        let _rows = reader.read_u16_le()?;
+        let _columns = reader.read_u16_le()?;
+
+        // 10 M2Track<float> animation blocks (28 bytes each for pre-Wrath)
+        let emission_speed_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let speed_variation_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let _vertical_range_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let _horizontal_range_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let gravity_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let lifespan_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let emission_rate_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let emission_area_width_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let emission_area_length_animation = M2AnimationBlock::<f32>::parse(reader)?;
+        let z_source_animation = M2AnimationBlock::<f32>::parse(reader)?;
+
+        // Pre-Wrath inline color/scale/UV data (instead of FBlocks)
+        let _mid_point = reader.read_f32_le()?;
+        // CImVector[3] = 3 × 4 bytes (BGRA u8×4)
+        let mut _color_values = [[0u8; 4]; 3];
+        for cv in &mut _color_values {
+            reader.read_exact(cv)?;
+        }
+        let mut _scale_values = [0.0f32; 3];
+        for sv in &mut _scale_values {
+            *sv = reader.read_f32_le()?;
+        }
+        // UV anim data
+        let mut _lifespan_uv_anim = [0u16; 3];
+        for v in &mut _lifespan_uv_anim {
+            *v = reader.read_u16_le()?;
+        }
+        let mut _decay_uv_anim = [0u16; 3];
+        for v in &mut _decay_uv_anim {
+            *v = reader.read_u16_le()?;
+        }
+        let mut _tail_uv_anim = [0i16; 2];
+        for v in &mut _tail_uv_anim {
+            *v = reader.read_i16_le()?;
+        }
+        let mut _tail_decay_uv_anim = [0i16; 2];
+        for v in &mut _tail_decay_uv_anim {
+            *v = reader.read_i16_le()?;
+        }
+
+        // Common tail parameters
+        let _tail_length = reader.read_f32_le()?;
+        let _twinkle_speed = reader.read_f32_le()?;
+        let _twinkle_percent = reader.read_f32_le()?;
+        let _twinkle_scale_min = reader.read_f32_le()?;
+        let _twinkle_scale_max = reader.read_f32_le()?;
+        let _inherit_velocity_scale = reader.read_f32_le()?;
+        let _drag = reader.read_f32_le()?;
+
+        // Pre-Wrath: single spin float
+        let _spin = reader.read_f32_le()?;
+
+        // M2Box tumble (2 × C3Vector = 24 bytes)
+        let _tumble_min = C3Vector::parse(reader)?;
+        let _tumble_max = C3Vector::parse(reader)?;
+
+        // Wind and follow parameters
+        let _wind_vector = C3Vector::parse(reader)?;
+        let _wind_time = reader.read_f32_le()?;
+        let _follow_speed1 = reader.read_f32_le()?;
+        let _follow_scale1 = reader.read_f32_le()?;
+        let _follow_speed2 = reader.read_f32_le()?;
+        let _follow_scale2 = reader.read_f32_le()?;
+
+        // M2Array<C3Vector> splinePoints
+        let _spline_points: M2Array<u8> = M2Array::parse(reader)?;
+
+        // M2Track<uchar> enabledIn (28 bytes for pre-Wrath)
+        let _enabled_in = M2AnimationBlock::<f32>::parse(reader)?;
+
+        // Build the struct with mapped and default values
+        Ok(Self {
+            id,
+            flags,
+            position,
+            bone_index,
+            texture_index,
+            model_filename,
+            parent_emitter: 0,
+            geometry_model_unknown: 0,
+            fallback_model_filename: Some(child_emitter_model_filename),
+            blending_type,
+            emitter_type: emitter_type_enum,
+            particle_type,
+            head_or_tail,
+            texture_file_data_ids: None,
+            texture_tile_coordinates: M2Array::new(0, 0),
+            enable_encryption: None,
+            multi_texture_param0: None,
+            multi_texture_param1: None,
+            // Map animation tracks to available f32-typed fields
+            emission_speed_animation,
+            emission_rate_animation,
+            emission_area_animation: emission_area_width_animation,
+            xy_scale_animation: M2AnimationBlock::default(),
+            z_scale_animation: gravity_animation,
+            color_animation: M2AnimationBlock::default(),
+            transparency_animation: lifespan_animation,
+            size_animation: emission_area_length_animation,
+            intensity_animation: speed_variation_animation,
+            z_source_animation,
+            // Set all float parameters to defaults
+            lifetime: 0.0,
+            emission_rate: 0.0,
+            emission_area_length: 0.0,
+            emission_area_width: 0.0,
+            emission_velocity: 0.0,
+            min_lifetime: 0.0,
+            max_lifetime: 0.0,
+            min_emission_rate: 0.0,
+            max_emission_rate: 0.0,
+            min_emission_area_length: 0.0,
+            max_emission_area_length: 0.0,
+            min_emission_area_width: 0.0,
+            max_emission_area_width: 0.0,
+            min_emission_velocity: 0.0,
+            max_emission_velocity: 0.0,
+            position_variation: 0.0,
+            min_position_variation: 0.0,
+            max_position_variation: 0.0,
+            initial_size: 0.0,
+            min_initial_size: 0.0,
+            max_initial_size: 0.0,
+            size_variation: 0.0,
+            min_size_variation: 0.0,
+            max_size_variation: 0.0,
+            horizontal_range: 0.0,
+            min_horizontal_range: 0.0,
+            max_horizontal_range: 0.0,
+            vertical_range: 0.0,
+            min_vertical_range: 0.0,
+            max_vertical_range: 0.0,
+            gravity: 0.0,
+            min_gravity: 0.0,
+            max_gravity: 0.0,
+            initial_velocity: 0.0,
+            min_initial_velocity: 0.0,
+            max_initial_velocity: 0.0,
+            speed_variation: 0.0,
+            min_speed_variation: 0.0,
+            max_speed_variation: 0.0,
+            rotation_speed: 0.0,
+            min_rotation_speed: 0.0,
+            max_rotation_speed: 0.0,
+            initial_rotation: 0.0,
+            min_initial_rotation: 0.0,
+            max_initial_rotation: 0.0,
+            mid_point_color: M2Color::default(),
+            color_animation_speed: 0.0,
+            color_median_time: _mid_point,
+            lifespan_unused: 0.0,
+            emission_rate_unused: 0.0,
+            unknown_1: 0,
+            unknown_2: 0.0,
+            particle_initial_state: None,
+            particle_initial_state_variation: None,
+            particle_convergence_time: None,
+            physics_parameters: None,
+        })
+    }
+
     /// Parse a particle emitter from a reader based on the M2 version
     pub fn parse<R: Read + Seek>(reader: &mut R, version: u32) -> Result<Self> {
+        // Pre-Wrath versions have a fundamentally different struct layout
+        if version < 264 {
+            return Self::parse_pre_wrath(reader, version);
+        }
+
         let id = reader.read_u32_le()?;
         let flags = M2ParticleFlags::from_bits_retain(reader.read_u32_le()?);
         let position = C3Vector::parse(reader)?;
